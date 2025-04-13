@@ -20,7 +20,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentIndex = 0;
+  int _currentIndex = 1;
   List<Map<String, dynamic>> _categories = [];
 
   final TextEditingController _categoryController = TextEditingController();
@@ -128,8 +128,8 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _buildHome(),
       ActivityPage(),
+      _buildHome(),
       ProfilePage(
         toggleTheme: widget.toggleTheme,
         isDarkMode: widget.isDarkMode,
@@ -139,7 +139,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(title: Text('Hello Mehul')),
       body: pages[_currentIndex],
-      floatingActionButton: _currentIndex == 0
+      floatingActionButton: _currentIndex == 1
           ? FloatingActionButton(
               onPressed: _showAddCategoryDialog,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -149,9 +149,9 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        items: const [        
           BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Activity'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Account'),
         ],
       ),
