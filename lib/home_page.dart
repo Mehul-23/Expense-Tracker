@@ -139,18 +139,24 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(title: Text('Hello Mehul')),
       body: pages[_currentIndex],
-      floatingActionButton: _currentIndex == 1
-          ? FloatingActionButton(
-              onPressed: _showAddCategoryDialog,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              child: Icon(Icons.add),
-            )
-          : null,
+      floatingActionButton:
+          _currentIndex == 1
+              ? FloatingActionButton(
+                onPressed: _showAddCategoryDialog,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(Icons.add),
+              )
+              : null,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
-        items: const [        
-          BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Activity'),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt),
+            label: 'Activity',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Account'),
         ],
@@ -159,71 +165,94 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHome() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Category Wise Spending', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          SizedBox(height: 20),
-          ..._categories.map(
-            (item) => Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: Icon(item['icon'], color: Colors.green),
-                title: Text(item['label']),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.bar_chart, color: Colors.green),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CategoryDetailPage(
-                              label: item['label'],
-                              icon: item['icon'],
-                              transactions: item['transactions'],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete, color: Colors.redAccent),
-                      onPressed: () => _confirmDeleteCategory(item),
-                    ),
-                  ],
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CategoryDetailPage(
-                        label: item['label'],
-                        icon: item['icon'],
-                        transactions: item['transactions'],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          SizedBox(height: 30),
-          Text('This Month Spendings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return _categories.isEmpty
+        ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton.icon(onPressed: () {}, icon: Icon(Icons.arrow_downward), label: Text('Income')),
-              ElevatedButton.icon(onPressed: () {}, icon: Icon(Icons.arrow_upward), label: Text('Spending')),
+              Icon(Icons.category, size: 80, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'No categories yet!',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              ElevatedButton.icon(
+                onPressed: _showAddCategoryDialog,
+                icon: Icon(Icons.add),
+                label: Text('Add Category'),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+              ),
             ],
           ),
-        ],
-      ),
-    );
+        )
+        : SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Category Wise Spending',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 20),
+              ..._categories.map(
+                (item) => Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListTile(
+                    leading: Icon(item['icon'], color: Colors.green),
+                    title: Text(item['label']),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.bar_chart, color: Colors.green),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (_) => CategoryDetailPage(
+                                      label: item['label'],
+                                      icon: item['icon'],
+                                      transactions: item['transactions'],
+                                    ),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete, color: Colors.redAccent),
+                          onPressed: () => _confirmDeleteCategory(item),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => CategoryDetailPage(
+                                label: item['label'],
+                                icon: item['icon'],
+                                transactions: item['transactions'],
+                              ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
   }
 }
 
