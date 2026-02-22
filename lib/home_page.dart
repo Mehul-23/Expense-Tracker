@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:expense_tracker/activityDetailPage.dart';
 import 'package:expense_tracker/categoryDetailPage.dart';
 import 'package:expense_tracker/profile.dart';
+import 'package:expense_tracker/categoryPiePage.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,13 +23,21 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 1;
   List<Map<String, dynamic>> _categories = [];
-
   final TextEditingController _categoryController = TextEditingController();
+  final TextEditingController _homeSearchController = TextEditingController();
+  String _homeQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _categoryController.dispose();
+    _homeSearchController.dispose();
+    super.dispose();
   }
 
   void _loadCategories() async {
@@ -38,14 +47,33 @@ class _HomePageState extends State<HomePage> {
     if (categoriesJson != null) {
       List<dynamic> categoriesList = json.decode(categoriesJson);
       setState(() {
-        _categories = categoriesList.map((category) => Map<String, dynamic>.from(category)).toList();
+        _categories = categoriesList.map((category) {
+          final map = Map<String, dynamic>.from(category);
+          // if icon was saved as a codePoint (int), reconstruct IconData
+          final iconVal = map['icon'];
+          if (iconVal is int) {
+            map['icon'] = IconData(iconVal, fontFamily: 'MaterialIcons');
+          }
+          return map;
+        }).toList();
       });
     }
   }
 
   void _saveCategories() async {
     final prefs = await SharedPreferences.getInstance();
-    String categoriesJson = json.encode(_categories);
+    // Convert any IconData to a serializable representation (codePoint)
+    final serializable = _categories.map((c) {
+      final icon = c['icon'];
+      final iconCode = icon is IconData ? icon.codePoint : icon;
+      return {
+        'icon': iconCode,
+        'label': c['label'],
+        'transactions': c['transactions'],
+      };
+    }).toList();
+
+    String categoriesJson = json.encode(serializable);
     await prefs.setString('categories', categoriesJson);
   }
 
@@ -137,7 +165,21 @@ class _HomePageState extends State<HomePage> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text('Hello Mehul')),
+      appBar: AppBar(
+        title: Text('Hello Mehul'),
+        actions: [
+          IconButton(
+            tooltip: 'Category breakdown',
+            icon: Icon(Icons.pie_chart),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CategoryPiePage()),
+              );
+            },
+          ),
+        ],
+      ),
       body: pages[_currentIndex],
       floatingActionButton:
           _currentIndex == 1
@@ -165,7 +207,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHome() {
-    return _categories.isEmpty
+    final filtered = _homeQuery.trim().isEmpty
+        ? _categories
+        : _categories.where((c) => (c['label'] ?? '').toString().toLowerCase().contains(_homeQuery.toLowerCase())).toList();
+
+    return filtered.isEmpty
         ? Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -196,12 +242,22 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TextField(
+                controller: _homeSearchController,
+                decoration: InputDecoration(
+                  hintText: 'Search categories',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onChanged: (v) => setState(() => _homeQuery = v),
+              ),
+              SizedBox(height: 12),
               Text(
                 'Category Wise Spending',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 20),
-              ..._categories.map(
+              ...filtered.map(
                 (item) => Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
