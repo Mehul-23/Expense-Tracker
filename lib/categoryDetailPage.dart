@@ -47,6 +47,7 @@ class CategoryDetailPage extends StatefulWidget {
 class _CategoryDetailPageState extends State<CategoryDetailPage> {
   List<Transaction> _transactions = [];
   double _budget = 0;
+  Map<String, double> _budgetHistory = {}; // effectiveMonth (yyyy-MM) -> amount
   final TextEditingController _txSearchController = TextEditingController();
   String _txQuery = '';
   // view mode
@@ -121,16 +122,53 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
 
   void _loadBudget() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    final value = prefs.getDouble('${widget.label}_budget') ?? 0.0;
+    final jsonStr = prefs.getString('${widget.label}_budgets');
+    if (jsonStr != null) {
+      try {
+        final Map<String, dynamic> map = jsonDecode(jsonStr);
+        _budgetHistory = map.map((k, v) => MapEntry(k, (v as num).toDouble()));
+      } catch (_) {
+        _budgetHistory = {};
+      }
+    } else {
+      // migration: support old single-value key '${widget.label}_budget'
+      final old = prefs.getDouble('${widget.label}_budget');
+      if (old != null && old > 0) {
+        final nowMonth = _monthKey(DateTime.now());
+        _budgetHistory[nowMonth] = old;
+        await prefs.setString('${widget.label}_budgets', jsonEncode(_budgetHistory));
+      }
+    }
     if (!mounted) return;
-    setState(() {
-      _budget = value;
-    });
+    _updateDisplayedBudget();
   }
 
-  void _saveBudget(double value) async {
+  void _saveBudgetForMonth(String effectiveMonth, double value) async {
+    // record a new effective budget starting from effectiveMonth
+    _budgetHistory[effectiveMonth] = value;
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('${widget.label}_budget', value);
+    await prefs.setString('${widget.label}_budgets', jsonEncode(_budgetHistory));
+    _updateDisplayedBudget();
+  }
+
+  double _getBudgetForMonth(String monthKey) {
+    if (_budgetHistory.isEmpty) return 0.0;
+    final keys = _budgetHistory.keys.toList()..sort(); // ascending
+    String? chosen;
+    for (final k in keys) {
+      if (k.compareTo(monthKey) <= 0) chosen = k;
+    }
+    if (chosen == null) return 0.0;
+    return _budgetHistory[chosen] ?? 0.0;
+  }
+
+  void _updateDisplayedBudget() {
+    final month = (_mode == DetailViewMode.month && _selectedMonth != null) ? _selectedMonth! : _monthKey(DateTime.now());
+    if (!mounted) {
+      _budget = _getBudgetForMonth(month);
+      return;
+    }
+    setState(() => _budget = _getBudgetForMonth(month));
   }
 
   void _addTransaction(double amount, DateTime date, String detail) async {
@@ -285,6 +323,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     _pageController = PageController(initialPage: 0);
     if (!mounted) return;
     setState(() {});
+    _updateDisplayedBudget();
   }
 
   String _monthKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
@@ -329,9 +368,12 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // weekly spendings computed on demand where needed
-    final totalSpent = _transactions.fold(0.0, (sum, tx) => sum + tx.amount);
-    final budgetLeft = _budget - totalSpent;
+    // Always show remaining budget for the selected month (or current month if none selected)
+    final currentMonthKey = _monthKey(DateTime.now());
+    final selectedMonthKey = _selectedMonth ?? currentMonthKey;
+    final monthlyList = _monthlyMap[selectedMonthKey] ?? [];
+    final monthlyTotal = monthlyList.fold(0.0, (s, t) => s + t.amount);
+    final budgetLeft = _budget - monthlyTotal;
 
     return Scaffold(
       appBar: AppBar(title: Text('${widget.label} Details')),
@@ -354,7 +396,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                   width: 180,
                   child: ToggleButtons(
                     isSelected: [_mode == DetailViewMode.week, _mode == DetailViewMode.month],
-                    onPressed: (idx) => setState(() => _mode = idx == 0 ? DetailViewMode.week : DetailViewMode.month),
+                    onPressed: (idx) => setState(() { _mode = idx == 0 ? DetailViewMode.week : DetailViewMode.month; _updateDisplayedBudget(); }),
                     children: [Padding(padding: EdgeInsets.symmetric(horizontal:12), child: Text('Week')), Padding(padding: EdgeInsets.symmetric(horizontal:12), child: Text('Month'))],
                   ),
                 ),
@@ -370,7 +412,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                           isExpanded: true,
                           value: _selectedMonth,
                           items: _monthKeys.map((m) => DropdownMenuItem(value: m, child: Text(_monthLabel(m)))).toList(),
-                          onChanged: (v) => setState(() => _selectedMonth = v),
+                          onChanged: (v) => setState(() { _selectedMonth = v; _updateDisplayedBudget(); }),
                         ),
                       ),
                     ],
@@ -395,7 +437,16 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                             child: PageView.builder(
                               controller: _pageController,
                               itemCount: _weekKeys.length,
-                              onPageChanged: (index) => setState(() => _selectedWeek = _weekKeys[index]),
+                              onPageChanged: (index) {
+                                final weekKey = _weekKeys[index];
+                                final weekDate = DateTime.parse(weekKey);
+                                final monthKey = _monthKey(weekDate);
+                                setState(() {
+                                  _selectedWeek = weekKey;
+                                  _selectedMonth = monthKey;
+                                  _updateDisplayedBudget();
+                                });
+                              },
                               itemBuilder: (context, index) {
                                 final key = _weekKeys[index];
                                 return Center(child: Text(_weekLabel(key), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)));
@@ -478,14 +529,14 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Budget for ${widget.label}', style: TextStyle(fontWeight: FontWeight.w600)),
+                        Text('Budget for ${widget.label} (${_monthLabel(selectedMonthKey)})', style: TextStyle(fontWeight: FontWeight.w600)),
                         Text(_budget > 0 ? '₹${_budget.toStringAsFixed(0)}' : 'No budget', style: TextStyle(color: Colors.grey[700])),
                       ],
                     ),
                     SizedBox(height: 8),
                     if (_budget > 0) ...[
                       LinearProgressIndicator(
-                        value: (_budget > 0) ? (totalSpent / _budget).clamp(0.0, 1.0) : 0.0,
+                        value: (_budget > 0) ? (monthlyTotal / _budget).clamp(0.0, 1.0) : 0.0,
                         backgroundColor: Colors.grey.shade300,
                         color: Colors.redAccent,
                         minHeight: 8,
@@ -498,7 +549,12 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                       alignment: Alignment.centerRight,
                       child: ElevatedButton.icon(
                         onPressed: () async {
+                          final effectiveMonth = (_mode == DetailViewMode.month && _selectedMonth != null)
+                              ? _selectedMonth!
+                              : _monthKey(DateTime.now());
                           final controller = TextEditingController();
+                          final existing = _getBudgetForMonth(effectiveMonth);
+                          controller.text = (existing > 0) ? existing.toStringAsFixed(0) : '';
                           await showDialog(
                             context: context,
                             builder: (_) => AlertDialog(
@@ -514,8 +570,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                                   onPressed: () {
                                     final value = double.tryParse(controller.text);
                                     if (value != null) {
-                                      setState(() => _budget = value);
-                                      _saveBudget(value);
+                                      _saveBudgetForMonth(effectiveMonth, value);
                                     }
                                     Navigator.pop(context);
                                   },

@@ -719,6 +719,10 @@ class _TodoDatePageState extends State<TodoDatePage> {
                             }),
                             title: Text(text, style: TextStyle(decoration: done ? TextDecoration.lineThrough : TextDecoration.none)),
                             subtitle: isRec ? Text('Recurring (${item['rule']})') : null,
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete, color: Colors.redAccent),
+                              onPressed: () => _removeTask(idx),
+                            ),
                             onTap: () => _editTask(idx),
                           ),
                         );
