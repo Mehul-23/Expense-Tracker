@@ -24,17 +24,20 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.fromSeed(seedColor: Colors.teal);
+    final darkColorScheme = ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark);
+
     return MaterialApp(
       title: 'Expense Tracker',
       debugShowCheckedModeBanner: false,
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        colorScheme: colorScheme,
         scaffoldBackgroundColor: Colors.grey[50],
         textTheme: GoogleFonts.poppinsTextTheme(),
         appBarTheme: AppBarTheme(
-          backgroundColor: ColorScheme.fromSeed(seedColor: Colors.teal).primary,
+          backgroundColor: colorScheme.primary,
           elevation: 0,
           centerTitle: false,
           titleTextStyle: GoogleFonts.poppins(
@@ -44,7 +47,7 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
         floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: ColorScheme.fromSeed(seedColor: Colors.teal).secondary,
+          backgroundColor: colorScheme.secondary,
           elevation: 4,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -69,7 +72,7 @@ class _MyAppState extends State<MyApp> {
           margin: EdgeInsets.symmetric(vertical: 8),
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          selectedItemColor: ColorScheme.fromSeed(seedColor: Colors.teal).primary,
+          selectedItemColor: colorScheme.primary,
           unselectedItemColor: Colors.grey,
           backgroundColor: Colors.white,
           showUnselectedLabels: true,
@@ -77,16 +80,21 @@ class _MyAppState extends State<MyApp> {
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark),
+        colorScheme: darkColorScheme,
         scaffoldBackgroundColor: Color(0xFF0B0B0B),
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
         appBarTheme: AppBarTheme(
-          backgroundColor: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark).surface,
+          backgroundColor: darkColorScheme.surface,
+          titleTextStyle: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
           elevation: 0,
           centerTitle: false,
         ),
         floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark).secondary,
+          backgroundColor: darkColorScheme.secondary,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -108,11 +116,13 @@ class _MyAppState extends State<MyApp> {
           color: Color(0xFF121212),
           elevation: 1,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.symmetric(vertical: 8),
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          selectedItemColor: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark).primary,
+          selectedItemColor: darkColorScheme.primary,
           unselectedItemColor: Colors.grey,
           backgroundColor: Color(0xFF0B0B0B),
+          showUnselectedLabels: true,
         ),
       ),
       home: HomePage(

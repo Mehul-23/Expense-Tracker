@@ -100,6 +100,10 @@ class _ActivityPageState extends State<ActivityPage> {
     _selectedMonth = _monthKeys.isNotEmpty ? _monthKeys.first : null;
 
     // set initial page to 0 (most recent)
+    // dispose previous controller to avoid leaking resources when reassigning
+    try {
+      _pageController.dispose();
+    } catch (_) {}
     _pageController = PageController(initialPage: 0);
   }
 
@@ -225,7 +229,9 @@ class _ActivityPageState extends State<ActivityPage> {
                       ),
                       SizedBox(height:8),
                       Builder(builder: (context) {
-                        final base = _selectedWeek != null && _weeklyMap.containsKey(_selectedWeek) ? List.from(_weeklyMap[_selectedWeek]!) : [];
+                        final List<Activity> base = _selectedWeek != null && _weeklyMap.containsKey(_selectedWeek)
+                            ? List<Activity>.from(_weeklyMap[_selectedWeek]!)
+                            : <Activity>[];
                         final q = _activityQuery.trim().toLowerCase();
                         final shown = q.isEmpty ? base : base.where((a) {
                           final dl = _safeDateLabel(a.date).toLowerCase();
@@ -259,7 +265,9 @@ class _ActivityPageState extends State<ActivityPage> {
                     ] else ...[
                       // month view
                       Builder(builder: (context) {
-                        final base = _selectedMonth != null && _monthlyMap.containsKey(_selectedMonth) ? List.from(_monthlyMap[_selectedMonth]!) : [];
+                        final List<Activity> base = _selectedMonth != null && _monthlyMap.containsKey(_selectedMonth)
+                            ? List<Activity>.from(_monthlyMap[_selectedMonth]!)
+                            : <Activity>[];
                         final q = _activityQuery.trim().toLowerCase();
                         final shown = q.isEmpty ? base : base.where((a) {
                           final dl = _safeDateLabel(a.date).toLowerCase();

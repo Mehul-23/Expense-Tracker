@@ -84,6 +84,7 @@ class _CategoryPiePageState extends State<CategoryPiePage> {
     final nowKey = _monthKey(DateTime.now());
     if (!months.contains(nowKey)) months.insert(0, nowKey);
 
+    if (!mounted) return;
     setState(() {
       _availableMonths = months;
       _selectedMonth = months.isNotEmpty ? months.first : nowKey;
@@ -139,12 +140,11 @@ class _CategoryPiePageState extends State<CategoryPiePage> {
                       DropdownButton<String>(
                         value: _selectedMonth,
                         items: _availableMonths.map((m) => DropdownMenuItem(value: m, child: Text(_monthLabel(m)))).toList(),
-                        onChanged: (v) {
+                        onChanged: (v) async {
                           setState(() {
                             _selectedMonth = v;
-                            // reload category sums for selected month from stored snapshots
-                            _loadFromSnapshots(v);
                           });
+                          await _loadFromSnapshots(v);
                         },
                       ),
                     ],
@@ -197,6 +197,7 @@ class _CategoryPiePageState extends State<CategoryPiePage> {
     final prefs = await SharedPreferences.getInstance();
     final snapJson = prefs.getString('monthly_snapshots');
     if (snapJson == null) {
+      if (!mounted) return;
       setState(() => _categorySums = {});
       return;
     }
@@ -210,11 +211,14 @@ class _CategoryPiePageState extends State<CategoryPiePage> {
             out[k] = (v as num).toDouble();
           } catch (_) {}
         });
+        if (!mounted) return;
         setState(() => _categorySums = out);
       } else {
+        if (!mounted) return;
         setState(() => _categorySums = {});
       }
     } catch (_) {
+      if (!mounted) return;
       setState(() => _categorySums = {});
     }
   }

@@ -84,9 +84,10 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     String? transactionsJson = prefs.getString(widget.label);
     if (transactionsJson != null) {
       List<dynamic> transactionsList = jsonDecode(transactionsJson);
+      final loaded = transactionsList.map((tx) => Transaction.fromMap(tx)).toList();
+      if (!mounted) return;
       setState(() {
-        _transactions =
-            transactionsList.map((tx) => Transaction.fromMap(tx)).toList();
+        _transactions = loaded;
       });
       _buildAggregations();
       return;
@@ -95,10 +96,12 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     // Fallback to transactions passed from previous screen (if any)
     if (widget.transactions != null && widget.transactions!.isNotEmpty) {
       try {
+        final loaded = widget.transactions!
+            .map((tx) => tx is Transaction ? tx : Transaction.fromMap(Map<String, dynamic>.from(tx)))
+            .toList();
+        if (!mounted) return;
         setState(() {
-          _transactions = widget.transactions!
-              .map((tx) => tx is Transaction ? tx : Transaction.fromMap(Map<String, dynamic>.from(tx)))
-              .toList();
+          _transactions = loaded;
         });
         _buildAggregations();
       } catch (_) {
@@ -118,8 +121,10 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
 
   void _loadBudget() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    final value = prefs.getDouble('${widget.label}_budget') ?? 0.0;
+    if (!mounted) return;
     setState(() {
-      _budget = prefs.getDouble('${widget.label}_budget') ?? 0.0;
+      _budget = value;
     });
   }
 
@@ -141,7 +146,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       Activity(
         type: 'Added transaction in ${widget.label}',
         date: DateFormat.yMMMd().format(date),
-        amount: amount.toInt(),
+        amount: amount,
       ),
     );
   }
@@ -159,7 +164,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       Activity(
         type: 'Deleted transaction in ${widget.label}',
         date: DateFormat.yMMMd().format(deleted.date),
-        amount: -deleted.amount.toInt(),
+        amount: -deleted.amount,
       ),
     );
   }
@@ -273,7 +278,12 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     _selectedWeek = _weekKeys.isNotEmpty ? _weekKeys.first : null;
     _selectedMonth = _monthKeys.isNotEmpty ? _monthKeys.first : null;
 
+    // dispose previous controller before reassigning to avoid memory leaks
+    try {
+      _pageController.dispose();
+    } catch (_) {}
     _pageController = PageController(initialPage: 0);
+    if (!mounted) return;
     setState(() {});
   }
 
@@ -315,28 +325,11 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     return out;
   }
 
-  List<double> _dailyChartForMonth(String monthKey) {
-    try {
-      final parts = monthKey.split('-');
-      final y = int.parse(parts[0]);
-      final m = int.parse(parts[1]);
-      final first = DateTime(y, m, 1);
-      final last = DateTime(y, m + 1, 1).subtract(Duration(days: 1));
-      final days = last.day;
-      final out = List.filled(days, 0.0);
-      for (final t in _monthlyMap[monthKey] ?? []) {
-        final idx = t.date.day - 1;
-        if (idx >= 0 && idx < days) out[idx] += t.amount;
-      }
-      return out;
-    } catch (_) {
-      return [];
-    }
-  }
+  // removed unused _dailyChartForMonth to silence analyzer warning
 
   @override
   Widget build(BuildContext context) {
-    final weeklySpendings = _calculateWeeklySpendings();
+    // weekly spendings computed on demand where needed
     final totalSpent = _transactions.fold(0.0, (sum, tx) => sum + tx.amount);
     final budgetLeft = _budget - totalSpent;
 
@@ -559,9 +552,13 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
             Builder(builder: (context) {
               final List<Transaction> filtered;
               if (_mode == DetailViewMode.week) {
-                filtered = _selectedWeek != null ? List.from(_weeklyMap[_selectedWeek] ?? []) : [];
+                filtered = _selectedWeek != null && _weeklyMap.containsKey(_selectedWeek)
+                    ? List<Transaction>.from(_weeklyMap[_selectedWeek]!)
+                    : <Transaction>[];
               } else if (_mode == DetailViewMode.month) {
-                filtered = _selectedMonth != null ? List.from(_monthlyMap[_selectedMonth] ?? []) : [];
+                filtered = _selectedMonth != null && _monthlyMap.containsKey(_selectedMonth)
+                    ? List<Transaction>.from(_monthlyMap[_selectedMonth]!)
+                    : <Transaction>[];
               } else {
                 filtered = _transactions;
               }
@@ -569,7 +566,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
               final query = _txQuery.trim().toLowerCase();
               final shown = query.isEmpty
                   ? filtered
-                  : filtered.where((t) => (t.detail ?? '').toString().toLowerCase().contains(query) || DateFormat.yMMMd().format(t.date).toLowerCase().contains(query)).toList();
+                  : filtered.where((t) => t.detail.toLowerCase().contains(query) || DateFormat.yMMMd().format(t.date).toLowerCase().contains(query)).toList();
 
               if (shown.isEmpty) return Center(child: Text('No transactions yet.'));
 
