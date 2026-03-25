@@ -1,7 +1,7 @@
 class Activity {
   final String type;  // e.g., "Added transaction", "Deleted category"
   final String date;
-  final int amount;
+  final double amount;
 
   Activity({
     required this.type,
@@ -21,7 +21,7 @@ class Activity {
     return Activity(
       type: map['type'],
       date: map['date'],
-      amount: map['amount'],
+      amount: (map['amount'] as num).toDouble(),
     );
   }
 }

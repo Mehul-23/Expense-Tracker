@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:expense_tracker/activityDetailPage.dart';
 import 'package:expense_tracker/categoryDetailPage.dart';
 import 'package:expense_tracker/profile.dart';
+import 'package:expense_tracker/categoryPiePage.dart';
+import 'package:expense_tracker/todo_page.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,19 +18,21 @@ class HomePage extends StatefulWidget {
   });
 
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 1;
   List<Map<String, dynamic>> _categories = [];
-
   final TextEditingController _categoryController = TextEditingController();
+  final TextEditingController _homeSearchController = TextEditingController();
+  String _homeQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadCategories();
+    _loadProfileName();
   }
 
   void _loadCategories() async {
@@ -38,14 +42,55 @@ class _HomePageState extends State<HomePage> {
     if (categoriesJson != null) {
       List<dynamic> categoriesList = json.decode(categoriesJson);
       setState(() {
-        _categories = categoriesList.map((category) => Map<String, dynamic>.from(category)).toList();
+        _categories = categoriesList.map((category) {
+          final map = Map<String, dynamic>.from(category);
+          // icon stored as a label string in prefs (or legacy int codePoint)
+          final iconVal = map['icon'];
+          if (iconVal is String) {
+            map['icon'] = _iconFromLabel(iconVal);
+          } else if (iconVal is int) {
+            // map known legacy codePoints to constants to avoid runtime IconData construction
+            map['icon'] = _iconFromCodePoint(iconVal) ?? Icons.category;
+          }
+          return map;
+        }).toList();
       });
     }
   }
 
+  String? _profileName;
+
+  Future<void> _loadProfileName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('profile_name');
+    if (!mounted) return;
+    setState(() {
+      _profileName = name;
+    });
+  }
+
+  @override
+  void dispose() {
+    _categoryController.dispose();
+    _homeSearchController.dispose();
+    super.dispose();
+  }
+
+
   void _saveCategories() async {
     final prefs = await SharedPreferences.getInstance();
-    String categoriesJson = json.encode(_categories);
+    // Convert any IconData to a serializable representation (label string)
+    final serializable = _categories.map((c) {
+      final icon = c['icon'];
+      final iconLabel = icon is IconData ? _iconLabelFromIcon(icon) : (icon is String ? icon : 'category');
+      return {
+        'icon': iconLabel,
+        'label': c['label'],
+        'transactions': c['transactions'],
+      };
+    }).toList();
+
+    String categoriesJson = json.encode(serializable);
     await prefs.setString('categories', categoriesJson);
   }
 
@@ -127,30 +172,62 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final greeting = 'Hello' + (_profileName != null && _profileName!.isNotEmpty ? ', $_profileName' : '');
     final pages = [
       ActivityPage(),
       _buildHome(),
       ProfilePage(
         toggleTheme: widget.toggleTheme,
         isDarkMode: widget.isDarkMode,
+        onProfileChanged: _loadProfileName,
       ),
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text('Hello Mehul')),
+      appBar: AppBar(
+        title: Text(greeting),
+        actions: [
+          IconButton(
+            tooltip: 'Category breakdown',
+            icon: Icon(Icons.pie_chart),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CategoryPiePage()),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'To‑Do List',
+            icon: Icon(Icons.event_note),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TodoPage()),
+              );
+            },
+          ),
+        ],
+      ),
       body: pages[_currentIndex],
-      floatingActionButton: _currentIndex == 1
-          ? FloatingActionButton(
-              onPressed: _showAddCategoryDialog,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              child: Icon(Icons.add),
-            )
-          : null,
+      floatingActionButton:
+          _currentIndex == 1
+              ? FloatingActionButton(
+                onPressed: _showAddCategoryDialog,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(Icons.add),
+              )
+              : null,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
-        items: const [        
-          BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Activity'),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt),
+            label: 'Activity',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Account'),
         ],
@@ -159,71 +236,114 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHome() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Category Wise Spending', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          SizedBox(height: 20),
-          ..._categories.map(
-            (item) => Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: Icon(item['icon'], color: Colors.green),
-                title: Text(item['label']),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.bar_chart, color: Colors.green),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CategoryDetailPage(
-                              label: item['label'],
-                              icon: item['icon'],
-                              transactions: item['transactions'],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete, color: Colors.redAccent),
-                      onPressed: () => _confirmDeleteCategory(item),
-                    ),
-                  ],
+    final filtered = _homeQuery.trim().isEmpty
+        ? _categories
+        : _categories.where((c) => (c['label'] ?? '').toString().toLowerCase().contains(_homeQuery.toLowerCase())).toList();
+
+    if (_categories.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.category, size: 80, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'No categories yet!',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            ElevatedButton.icon(
+              onPressed: _showAddCategoryDialog,
+              icon: Icon(Icons.add),
+              label: Text('Add Category'),
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CategoryDetailPage(
-                        label: item['label'],
-                        icon: item['icon'],
-                        transactions: item['transactions'],
-                      ),
-                    ),
-                  );
-                },
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
             ),
-          ),
-          SizedBox(height: 30),
-          Text('This Month Spendings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          ],
+        ),
+      );
+    }
+
+    if (filtered.isEmpty) {
+      return Center(child: Text('No results for "$_homeQuery"'));
+    }
+
+    return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ElevatedButton.icon(onPressed: () {}, icon: Icon(Icons.arrow_downward), label: Text('Income')),
-              ElevatedButton.icon(onPressed: () {}, icon: Icon(Icons.arrow_upward), label: Text('Spending')),
+              TextField(
+                controller: _homeSearchController,
+                decoration: InputDecoration(
+                  hintText: 'Search categories',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onChanged: (v) => setState(() => _homeQuery = v),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Category Wise Spending',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 20),
+              ...filtered.map(
+                (item) => Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListTile(
+                    leading: Icon(item['icon'], color: Colors.green),
+                    title: Text(item['label']),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.bar_chart, color: Colors.green),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (_) => CategoryDetailPage(
+                                      label: item['label'],
+                                      icon: item['icon'],
+                                      transactions: item['transactions'],
+                                    ),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete, color: Colors.redAccent),
+                          onPressed: () => _confirmDeleteCategory(item),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => CategoryDetailPage(
+                                label: item['label'],
+                                icon: item['icon'],
+                                transactions: item['transactions'],
+                              ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
             ],
           ),
-        ],
-      ),
-    );
+        );
   }
 }
 
@@ -301,4 +421,56 @@ IconData _getIconForCategory(String label) {
     return Icons.attach_money;
   }
   return Icons.category;
+}
+
+String _iconLabelFromIcon(IconData icon) {
+  if (icon == Icons.fastfood) return 'fastfood';
+  if (icon == Icons.medical_information) return 'medical';
+  if (icon == Icons.home) return 'home';
+  if (icon == Icons.trending_up) return 'trending_up';
+  if (icon == Icons.shopping_cart) return 'shopping_cart';
+  if (icon == Icons.card_travel) return 'travel';
+  if (icon == Icons.receipt_long) return 'receipt';
+  if (icon == Icons.emoji_emotions) return 'entertainment';
+  if (icon == Icons.attach_money) return 'money';
+  return 'category';
+}
+
+IconData _iconFromLabel(String label) {
+  switch (label) {
+    case 'fastfood':
+      return Icons.fastfood;
+    case 'medical':
+      return Icons.medical_information;
+    case 'home':
+      return Icons.home;
+    case 'trending_up':
+      return Icons.trending_up;
+    case 'shopping_cart':
+      return Icons.shopping_cart;
+    case 'travel':
+      return Icons.card_travel;
+    case 'receipt':
+      return Icons.receipt_long;
+    case 'entertainment':
+      return Icons.emoji_emotions;
+    case 'money':
+      return Icons.attach_money;
+    default:
+      return Icons.category;
+  }
+}
+
+IconData? _iconFromCodePoint(int cp) {
+  // map known codePoints to constants
+  if (cp == Icons.fastfood.codePoint) return Icons.fastfood;
+  if (cp == Icons.medical_information.codePoint) return Icons.medical_information;
+  if (cp == Icons.home.codePoint) return Icons.home;
+  if (cp == Icons.trending_up.codePoint) return Icons.trending_up;
+  if (cp == Icons.shopping_cart.codePoint) return Icons.shopping_cart;
+  if (cp == Icons.card_travel.codePoint) return Icons.card_travel;
+  if (cp == Icons.receipt_long.codePoint) return Icons.receipt_long;
+  if (cp == Icons.emoji_emotions.codePoint) return Icons.emoji_emotions;
+  if (cp == Icons.attach_money.codePoint) return Icons.attach_money;
+  return null;
 }
